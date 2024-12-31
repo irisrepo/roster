@@ -39,6 +39,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 
 
 class MainActivity : ComponentActivity() {
@@ -49,28 +58,43 @@ class MainActivity : ComponentActivity() {
             ConstructionRosterTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     var selectedImage by remember { mutableStateOf<ImageItem?>(null) }
-                    
+                    var selectedMonthImage by remember { mutableStateOf<MonthImageSelection?>(null) }
+
                     Column(
                         modifier = Modifier
                             .padding(innerPadding)
                             .fillMaxSize()
                     ) {
-                        ImageGrid(
-                            modifier = Modifier.weight(1f),
-                            onImageSelected = { imageItem ->
-                                selectedImage = imageItem
-                            }
-                        )
-                        
-                        // Only show selected image and calendar when an image is selected
-                        selectedImage?.let { image ->
-                            SelectedImageDisplay(
-                                imageRes = image.imageRes,
-                                title = image.title,
-                                onDismiss = { selectedImage = null }
+                        // Show third screen if month is selected
+                        if (selectedMonthImage != null) {
+                            MonthImageScreen(
+                                monthImage = selectedMonthImage!!,
+                                onDismiss = { selectedMonthImage = null }
                             )
-                            // Calendar is only shown when an image is selected
-                            MonthCalendar()
+                        } else {
+                            // Show original screens
+                            ImageGrid(
+                                modifier = Modifier.weight(1f),
+                                onImageSelected = { imageItem ->
+                                    selectedImage = imageItem
+                                }
+                            )
+
+                            selectedImage?.let { image ->
+                                SelectedImageDisplay(
+                                    imageRes = image.imageRes,
+                                    title = image.title,
+                                    onDismiss = { selectedImage = null }
+                                )
+                                MonthCalendar(
+                                    onMonthSelected = { month ->
+                                        selectedMonthImage = MonthImageSelection(
+                                            month = month,
+                                            imageItem = image
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -97,6 +121,11 @@ data class SelectedImage(
     val imageRes: Int,
     val title: String,
     val isVisible: Boolean
+)
+
+data class MonthImageSelection(
+    val month: Month,
+    val imageItem: ImageItem
 )
 
 @Composable
@@ -166,9 +195,33 @@ fun SelectedImageDisplay(
             .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(16.dp)
         ) {
+            // Add back button row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
             Image(
                 painter = painterResource(id = imageRes),
                 contentDescription = title,
@@ -177,28 +230,25 @@ fun SelectedImageDisplay(
                     .height(200.dp),
                 contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
-            )
         }
     }
 }
 
 @Composable
-fun MonthCalendar() {
+fun MonthCalendar(
+    onMonthSelected: (Month) -> Unit
+) {
     var selectedMonth by remember { mutableStateOf<Month?>(null) }
     val currentYear = Clock.System.now()
         .toLocalDateTime(TimeZone.currentSystemDefault())
         .year
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
             .background(
-                color = Color(0xFFE8F5E9), // Light green background
+                color = Color(0xFF000000), // Light green background
                 shape = RoundedCornerShape(16.dp)
             )
             .padding(16.dp)
@@ -211,7 +261,7 @@ fun MonthCalendar() {
             ),
             modifier = Modifier.padding(bottom = 16.dp)
         )
-        
+
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -222,7 +272,10 @@ fun MonthCalendar() {
                     month = month,
                     year = currentYear,
                     isSelected = month == selectedMonth,
-                    onMonthClick = { selectedMonth = month }
+                    onMonthClick = { 
+                        selectedMonth = month
+                        onMonthSelected(month)
+                    }
                 )
             }
         }
@@ -242,7 +295,7 @@ fun MonthCard(
     } else {
         Color.White
     }
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -288,6 +341,107 @@ fun MonthCard(
                     color = if (isSelected) Color.White else Color(0xFF558B2F)
                 )
             )
+        }
+    }
+}
+
+@Composable
+fun MonthImageScreen(
+    monthImage: MonthImageSelection,
+    onDismiss: () -> Unit
+) {
+    var amountPerDay by remember { mutableStateOf("") }
+    val currentYear = Clock.System.now()
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+        .year
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Header with back button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "← Back",
+                modifier = Modifier
+                    .clickable(onClick = onDismiss)
+                    .padding(8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "${monthImage.month.name.take(3)} ${monthImage.month.number.toString().padStart(2, '0')} $currentYear",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                )
+            )
+            // Empty spacer for alignment
+            Spacer(modifier = Modifier.width(64.dp))
+        }
+
+        // Display selected image
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Image(
+                    painter = painterResource(id = monthImage.imageItem.imageRes),
+                    contentDescription = monthImage.imageItem.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = monthImage.imageItem.title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                
+                // Amount per day section
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "Amount per day",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = amountPerDay,
+                        onValueChange = { amountPerDay = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Enter amount") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                }
+            }
         }
     }
 }

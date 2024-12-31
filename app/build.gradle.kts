@@ -63,4 +63,8 @@ dependencies {
     
     // Add this for LocalDate support
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
+    
+    // Add Material icons
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.compose.material:material-icons-extended")
 }
