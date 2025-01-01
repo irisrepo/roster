@@ -452,37 +452,6 @@ fun MonthImageScreen(
             )
         }
 
-        // Paid Amount Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Total Paid",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "₹${monthImage.dayEntries.values.sumOf { it.amountPaid.toIntOrNull() ?: 0 }}",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            }
-        }
-
         // Amount per day and Month Total Card
         Card(
             modifier = Modifier
@@ -610,9 +579,9 @@ private fun MonthDaysGrid(
         4, 6, 9, 11 -> 30
         else -> 31
     }
-    
+
     val firstDayOfWeek = firstDayOfMonth.dayOfWeek.ordinal
-    
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(7),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -624,7 +593,7 @@ private fun MonthDaysGrid(
         items(firstDayOfWeek) {
             Box(modifier = Modifier.size(50.dp))
         }
-        
+
         // Days of the month
         items(daysInMonth) { day ->
             val dayOfMonth = day + 1
@@ -648,20 +617,17 @@ private fun DayCell(
 ) {
     Card(
         modifier = Modifier
-            .size(50.dp)
+            .aspectRatio(1f)
+            .padding(2.dp)
             .clickable(onClick = onClick),
-        border = BorderStroke(
-            width = if (isToday) 2.dp else 1.dp,
-            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-        ),
-        shape = RoundedCornerShape(4.dp),
         colors = CardDefaults.cardColors(
             containerColor = when {
-                dayEntry?.isAbsent == true -> MaterialTheme.colorScheme.errorContainer
-                dayEntry != null -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surface
+                dayEntry?.isAbsent == true -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                dayEntry != null -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) // Pleasant light background
             }
-        )
+        ),
+        shape = RoundedCornerShape(4.dp)
     ) {
         Column(
             modifier = Modifier
@@ -673,8 +639,12 @@ private fun DayCell(
             Text(
                 text = day.toString(),
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
+                    color = if (isToday)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface
+                ),
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
             )
             if (dayEntry != null && !dayEntry.isAbsent) {
                 Text(
@@ -764,6 +734,22 @@ fun DateDetailsScreen(
                 )
             )
             Spacer(modifier = Modifier.width(48.dp))
+        }
+
+        // Profile Image Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Image(
+                painter = painterResource(id = monthImage.imageItem.imageRes),
+                contentDescription = monthImage.imageItem.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
         }
 
         // Amount per day with Total
@@ -877,20 +863,6 @@ fun DateDetailsScreen(
             }
         }
 
-        // Amount Paid
-        OutlinedTextField(
-            value = amountPaid,
-            onValueChange = { amountPaid = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            label = { Text("Amount Paid") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done
-            )
-        )
-
         // Absent Checkbox
         Row(
             modifier = Modifier
@@ -900,7 +872,12 @@ fun DateDetailsScreen(
         ) {
             Checkbox(
                 checked = isAbsent,
-                onCheckedChange = { isAbsent = it }
+                onCheckedChange = { 
+                    isAbsent = it
+                    if (it) {
+                        amountPaid = "" // Clear amount paid when marked as absent
+                    }
+                }
             )
             Text(
                 text = "Absent",
@@ -908,6 +885,26 @@ fun DateDetailsScreen(
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
+
+        // Amount Paid - disabled when absent
+        OutlinedTextField(
+            value = amountPaid,
+            onValueChange = { if (!isAbsent) amountPaid = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            label = { Text("Amount Paid") },
+            enabled = !isAbsent,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            )
+        )
 
         // Submit Button
         Button(
