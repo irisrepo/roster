@@ -54,6 +54,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
+import androidx.compose.ui.text.style.TextAlign
 
 
 class MainActivity : ComponentActivity() {
@@ -582,28 +583,78 @@ private fun MonthDaysGrid(
 
     val firstDayOfWeek = firstDayOfMonth.dayOfWeek.ordinal
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(7),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        userScrollEnabled = false,
-        modifier = Modifier.height(((daysInMonth + firstDayOfWeek + 6) / 7 * 50).dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
-        // Empty cells before first day
-        items(firstDayOfWeek) {
-            Box(modifier = Modifier.size(50.dp))
+        // Month and Year header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${month.name} (${month.number}) $year",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                textAlign = TextAlign.Center
+            )
         }
 
-        // Days of the month
-        items(daysInMonth) { day ->
-            val dayOfMonth = day + 1
-            val dayEntry = monthImage.dayEntries[dayOfMonth]
-            DayCell(
-                day = dayOfMonth,
-                isToday = isToday(year, month.number, dayOfMonth),
-                dayEntry = dayEntry,
-                onClick = { onDateSelected(LocalDate(year, month.number, dayOfMonth)) }
-            )
+        // Days of week header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
+                Text(
+                    text = day,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Calendar grid with fixed height calculation
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            userScrollEnabled = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp) // Fixed height to ensure all weeks are visible
+        ) {
+            // Empty cells before first day
+            items(firstDayOfWeek) {
+                Box(modifier = Modifier.aspectRatio(1f))
+            }
+
+            // Days of the month
+            items(daysInMonth) { day ->
+                val dayOfMonth = day + 1
+                val dayEntry = monthImage.dayEntries[dayOfMonth]
+                DayCell(
+                    day = dayOfMonth,
+                    isToday = isToday(year, month.number, dayOfMonth),
+                    dayEntry = dayEntry,
+                    onClick = { onDateSelected(LocalDate(year, month.number, dayOfMonth)) }
+                )
+            }
+
+            // Add empty cells to complete the grid if needed
+            val totalCells = firstDayOfWeek + daysInMonth
+            val remainingCells = (7 - (totalCells % 7)) % 7
+            items(remainingCells) {
+                Box(modifier = Modifier.aspectRatio(1f))
+            }
         }
     }
 }
