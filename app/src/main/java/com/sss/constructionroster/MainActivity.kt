@@ -53,6 +53,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 
 
 class MainActivity : ComponentActivity() {
@@ -395,16 +396,27 @@ fun MonthImageScreen(
         .toLocalDateTime(TimeZone.currentSystemDefault())
         .year
 
+    // Calculate totals
+    val daysInMonth = when (monthImage.month.number) {
+        2 -> if (isLeapYear(currentYear)) 29 else 28
+        4, 6, 9, 11 -> 30
+        else -> 31
+    }
+    val totalPossibleAmount = amountPerDay.toIntOrNull()?.times(daysInMonth) ?: 0
+    val totalPaidAmount = monthImage.dayEntries.values.sumOf { it.amountPaid.toIntOrNull() ?: 0 }
+    val absentDaysAmount = monthImage.dayEntries.values.count { it.isAbsent } * (amountPerDay.toIntOrNull() ?: 0)
+    val remainingAmount = totalPossibleAmount - totalPaidAmount - absentDaysAmount
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(12.dp)
     ) {
         // Header with back button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 4.dp),
+                .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -416,7 +428,7 @@ fun MonthImageScreen(
                 )
             }
             Text(
-                text = "${monthImage.month.name.take(3)} ${monthImage.month.number.toString().padStart(2, '0')} $currentYear",
+                text = "${monthImage.month.name} $currentYear",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold
                 )
@@ -424,116 +436,164 @@ fun MonthImageScreen(
             Spacer(modifier = Modifier.width(48.dp))
         }
 
-        // Scrollable content
-        Column(
+        // Profile Image Card
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f) // This ensures the column takes remaining space
-                .verticalScroll(rememberScrollState())
+                .height(180.dp)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(8.dp)
         ) {
-            // Image Card with reduced height
-            Card(
+            Image(
+                painter = painterResource(id = monthImage.imageItem.imageRes),
+                contentDescription = monthImage.imageItem.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // Paid Amount Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
-                    .padding(vertical = 4.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Image(
-                    painter = painterResource(id = monthImage.imageItem.imageRes),
-                    contentDescription = monthImage.imageItem.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                Text(
+                    text = "Total Paid",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "₹${monthImage.dayEntries.values.sumOf { it.amountPaid.toIntOrNull() ?: 0 }}",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
+        }
 
-            // Amount per day row with compact layout
-            Card(
+        // Amount per day and Month Total Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Amount per day",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    OutlinedTextField(
-                        value = amountPerDay,
-                        onValueChange = { newValue -> 
-                            amountPerDay = newValue
-                            onAmountPerDayChange(newValue)
-                        },
-                        modifier = Modifier.width(140.dp),
-                        placeholder = { Text("Enter amount", fontSize = 14.sp) },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        )
-                    )
-                }
-            }
-
-            // Calendar Card with optimized spacing
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                // Amount per day input (smaller)
+                OutlinedTextField(
+                    value = amountPerDay,
+                    onValueChange = { 
+                        amountPerDay = it
+                        onAmountPerDayChange(it)
+                    },
+                    modifier = Modifier.weight(0.4f),
+                    label = { Text("Per Day") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium
                 )
-            ) {
+                
+                // Totals Column
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
+                    modifier = Modifier.weight(0.6f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Days of week header with reduced spacing
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                    // Month Total
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
-                            Text(
-                                text = day,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            )
-                        }
+                        Text(
+                            text = "Month Total",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "₹$totalPossibleAmount",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Calendar grid
-                    MonthDaysGrid(
-                        month = monthImage.month,
-                        year = currentYear,
-                        monthImage = monthImage,
-                        onDateSelected = onDateSelected
+                    Divider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        thickness = 0.5.dp
                     )
+                    
+                    // Paid Amount
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Paid Amount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "₹$totalPaidAmount",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+
+                    Divider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        thickness = 0.5.dp
+                    )
+                    
+                    // Remaining Amount
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Remaining",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "₹$remainingAmount",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        )
+                    }
                 }
             }
         }
+
+        // Calendar Grid
+        MonthDaysGrid(
+            month = monthImage.month,
+            year = currentYear,
+            monthImage = monthImage,
+            onDateSelected = onDateSelected
+        )
     }
 }
 
@@ -718,47 +778,100 @@ fun DateDetailsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(12.dp)
             ) {
-                // Amount per day (read-only)
-                OutlinedTextField(
-                    value = amountPerDay,
-                    onValueChange = { },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    label = { Text("Amount per day") },
-                    readOnly = true,
-                    enabled = false
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Total calculations
+                // Amount per day and Month Total in a row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column {
+                    OutlinedTextField(
+                        value = amountPerDay,
+                        onValueChange = { },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Amount per day") },
+                        readOnly = true,
+                        enabled = false,
+                        singleLine = true
+                    )
+                    
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(top = 8.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
-                            text = "Month Total: ₹$totalPossibleAmount",
+                            text = "Month Total",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "Paid: ₹$totalPaidAmount",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Absent Days: ${monthImage.dayEntries.values.count { it.isAbsent }}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Remaining: ₹$remainingAmount",
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            text = "₹$totalPossibleAmount",
+                            style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Payment details in a more compact layout
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Paid:",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "₹$totalPaidAmount",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Absent:",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${monthImage.dayEntries.values.count { it.isAbsent }}",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Remaining:",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "₹$remainingAmount",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
                     }
                 }
             }
