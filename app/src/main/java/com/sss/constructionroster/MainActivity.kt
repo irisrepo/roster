@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,6 +51,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Button
 
 
 class MainActivity : ComponentActivity() {
@@ -61,41 +64,70 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     var selectedImage by remember { mutableStateOf<ImageItem?>(null) }
                     var selectedMonthImage by remember { mutableStateOf<MonthImageSelection?>(null) }
+                    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
                     Column(
                         modifier = Modifier
                             .padding(innerPadding)
                             .fillMaxSize()
                     ) {
-                        // Show third screen if month is selected
-                        if (selectedMonthImage != null) {
-                            MonthImageScreen(
-                                monthImage = selectedMonthImage!!,
-                                onDismiss = { selectedMonthImage = null }
-                            )
-                        } else {
-                            // Show original screens
-                            ImageGrid(
-                                modifier = Modifier.weight(1f),
-                                onImageSelected = { imageItem ->
-                                    selectedImage = imageItem
-                                }
-                            )
-
-                            selectedImage?.let { image ->
-                                SelectedImageDisplay(
-                                    imageRes = image.imageRes,
-                                    title = image.title,
-                                    onDismiss = { selectedImage = null }
+                        when {
+                            selectedDate != null -> {
+                                DateDetailsScreen(
+                                    date = selectedDate!!,
+                                    amountPerDay = selectedMonthImage?.amountPerDay ?: "",
+                                    monthImage = selectedMonthImage!!,
+                                    onDismiss = { selectedDate = null },
+                                    onSubmit = { dateDetails ->
+                                        selectedMonthImage = selectedMonthImage?.copy(
+                                            dayEntries = selectedMonthImage?.dayEntries?.apply {
+                                                put(dateDetails.date.dayOfMonth, DayEntry(
+                                                    date = dateDetails.date,
+                                                    amountPaid = dateDetails.amountPaid,
+                                                    isAbsent = dateDetails.isAbsent
+                                                ))
+                                            } ?: mutableMapOf()
+                                        )
+                                        selectedDate = null
+                                    }
                                 )
-                                MonthCalendar(
-                                    onMonthSelected = { month ->
-                                        selectedMonthImage = MonthImageSelection(
-                                            month = month,
-                                            imageItem = image
+                            }
+                            selectedMonthImage != null -> {
+                                MonthImageScreen(
+                                    monthImage = selectedMonthImage!!,
+                                    onDismiss = { selectedMonthImage = null },
+                                    onDateSelected = { date -> selectedDate = date },
+                                    onAmountPerDayChange = { amount ->
+                                        selectedMonthImage = selectedMonthImage?.copy(
+                                            amountPerDay = amount
                                         )
                                     }
                                 )
+                            }
+                            else -> {
+                                ImageGrid(
+                                    modifier = Modifier.weight(1f),
+                                    onImageSelected = { imageItem ->
+                                        selectedImage = imageItem
+                                    }
+                                )
+
+                                selectedImage?.let { image ->
+                                    SelectedImageDisplay(
+                                        imageRes = image.imageRes,
+                                        title = image.title,
+                                        onDismiss = { selectedImage = null }
+                                    )
+                                    MonthCalendar(
+                                        onMonthSelected = { month ->
+                                            selectedMonthImage = MonthImageSelection(
+                                                month = month,
+                                                imageItem = image,
+                                                amountPerDay = ""
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -127,7 +159,9 @@ data class SelectedImage(
 
 data class MonthImageSelection(
     val month: Month,
-    val imageItem: ImageItem
+    val imageItem: ImageItem,
+    val amountPerDay: String = "",
+    val dayEntries: MutableMap<Int, DayEntry> = mutableMapOf()
 )
 
 @Composable
@@ -350,9 +384,13 @@ fun MonthCard(
 @Composable
 fun MonthImageScreen(
     monthImage: MonthImageSelection,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onDateSelected: (LocalDate) -> Unit,
+    onAmountPerDayChange: (String) -> Unit
 ) {
-    var amountPerDay by remember { mutableStateOf("") }
+    var amountPerDay by remember(monthImage.amountPerDay) { 
+        mutableStateOf(monthImage.amountPerDay) 
+    }
     val currentYear = Clock.System.now()
         .toLocalDateTime(TimeZone.currentSystemDefault())
         .year
@@ -360,19 +398,17 @@ fun MonthImageScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         // Header with back button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onDismiss,
-            ) {
+            IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
@@ -381,25 +417,26 @@ fun MonthImageScreen(
             }
             Text(
                 text = "${monthImage.month.name.take(3)} ${monthImage.month.number.toString().padStart(2, '0')} $currentYear",
-                style = MaterialTheme.typography.titleLarge.copy(
+                style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold
                 )
             )
             Spacer(modifier = Modifier.width(48.dp))
         }
 
-        // Display selected image and amount per day in a scrollable column
+        // Scrollable content
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f) // This ensures the column takes remaining space
                 .verticalScroll(rememberScrollState())
         ) {
-            // Image Card
+            // Image Card with reduced height
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(250.dp)
-                    .padding(vertical = 8.dp)
+                    .height(200.dp)
+                    .padding(vertical = 4.dp)
             ) {
                 Image(
                     painter = painterResource(id = monthImage.imageItem.imageRes),
@@ -409,44 +446,56 @@ fun MonthImageScreen(
                 )
             }
 
-            // Amount per day row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Amount per day",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier.padding(end = 16.dp)
-                )
-                OutlinedTextField(
-                    value = amountPerDay,
-                    onValueChange = { amountPerDay = it },
-                    modifier = Modifier.width(160.dp),
-                    placeholder = { Text("Enter amount") },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    ),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
-                )
-            }
-
-            // Calendar Card
+            // Amount per day row with compact layout
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Amount per day",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    OutlinedTextField(
+                        value = amountPerDay,
+                        onValueChange = { newValue -> 
+                            amountPerDay = newValue
+                            onAmountPerDayChange(newValue)
+                        },
+                        modifier = Modifier.width(140.dp),
+                        placeholder = { Text("Enter amount", fontSize = 14.sp) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                }
+            }
+
+            // Calendar Card with optimized spacing
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -454,12 +503,12 @@ fun MonthImageScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(12.dp)
                 ) {
-                    // Days of week header
+                    // Days of week header with reduced spacing
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
                             Text(
@@ -467,17 +516,20 @@ fun MonthImageScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.primary
-                                )
+                                ),
+                                modifier = Modifier.padding(horizontal = 2.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     // Calendar grid
                     MonthDaysGrid(
                         month = monthImage.month,
-                        year = currentYear
+                        year = currentYear,
+                        monthImage = monthImage,
+                        onDateSelected = onDateSelected
                     )
                 }
             }
@@ -488,7 +540,9 @@ fun MonthImageScreen(
 @Composable
 private fun MonthDaysGrid(
     month: Month,
-    year: Int
+    year: Int,
+    monthImage: MonthImageSelection,
+    onDateSelected: (LocalDate) -> Unit
 ) {
     val firstDayOfMonth = LocalDate(year, month.number, 1)
     val daysInMonth = when (month.number) {
@@ -501,21 +555,25 @@ private fun MonthDaysGrid(
     
     LazyVerticalGrid(
         columns = GridCells.Fixed(7),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         userScrollEnabled = false,
-        modifier = Modifier.height(((daysInMonth + firstDayOfWeek + 6) / 7 * 40).dp)
+        modifier = Modifier.height(((daysInMonth + firstDayOfWeek + 6) / 7 * 50).dp)
     ) {
         // Empty cells before first day
         items(firstDayOfWeek) {
-            Box(modifier = Modifier.size(40.dp))
+            Box(modifier = Modifier.size(50.dp))
         }
         
         // Days of the month
         items(daysInMonth) { day ->
+            val dayOfMonth = day + 1
+            val dayEntry = monthImage.dayEntries[dayOfMonth]
             DayCell(
-                day = day + 1,
-                isToday = isToday(year, month.number, day + 1)
+                day = dayOfMonth,
+                isToday = isToday(year, month.number, dayOfMonth),
+                dayEntry = dayEntry,
+                onClick = { onDateSelected(LocalDate(year, month.number, dayOfMonth)) }
             )
         }
     }
@@ -524,25 +582,49 @@ private fun MonthDaysGrid(
 @Composable
 private fun DayCell(
     day: Int,
-    isToday: Boolean
+    isToday: Boolean,
+    dayEntry: DayEntry?,
+    onClick: () -> Unit
 ) {
-    Box(
+    Card(
         modifier = Modifier
-            .size(40.dp)
-            .border(
-                width = if (isToday) 2.dp else 1.dp,
-                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .padding(4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = day.toString(),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-            )
+            .size(50.dp)
+            .clickable(onClick = onClick),
+        border = BorderStroke(
+            width = if (isToday) 2.dp else 1.dp,
+            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+        ),
+        shape = RoundedCornerShape(4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                dayEntry?.isAbsent == true -> MaterialTheme.colorScheme.errorContainer
+                dayEntry != null -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surface
+            }
         )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = day.toString(),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+            )
+            if (dayEntry != null && !dayEntry.isAbsent) {
+                Text(
+                    text = "₹${dayEntry.amountPaid}",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
     }
 }
 
@@ -554,4 +636,183 @@ private fun isToday(year: Int, month: Int, day: Int): Boolean {
 // Add this helper function to check for leap years
 private fun isLeapYear(year: Int): Boolean {
     return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+// Add this data class for date details
+data class DateDetails(
+    val date: LocalDate,
+    val amountPerDay: String,
+    val amountPaid: String = "",
+    val isAbsent: Boolean = false
+)
+
+// Add this data class to track daily entries
+data class DayEntry(
+    val date: LocalDate,
+    val amountPaid: String,
+    val isAbsent: Boolean
+)
+
+// Update DateDetailsScreen to show total calculations
+@Composable
+fun DateDetailsScreen(
+    date: LocalDate,
+    amountPerDay: String,
+    monthImage: MonthImageSelection,
+    onDismiss: () -> Unit,
+    onSubmit: (DateDetails) -> Unit
+) {
+    var amountPaid by remember { mutableStateOf("") }
+    var isAbsent by remember { mutableStateOf(false) }
+
+    // Calculate totals
+    val daysInMonth = when (date.monthNumber) {
+        2 -> if (isLeapYear(date.year)) 29 else 28
+        4, 6, 9, 11 -> 30
+        else -> 31
+    }
+    
+    val totalPossibleAmount = amountPerDay.toIntOrNull()?.times(daysInMonth) ?: 0
+    val totalPaidAmount = monthImage.dayEntries.values.sumOf { it.amountPaid.toIntOrNull() ?: 0 }
+    val absentDaysAmount = monthImage.dayEntries.values.count { it.isAbsent } * (amountPerDay.toIntOrNull() ?: 0)
+    val remainingAmount = totalPossibleAmount - totalPaidAmount - absentDaysAmount
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Header with back button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = "${date.month.name} ${date.dayOfMonth}, ${date.year}",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                )
+            )
+            Spacer(modifier = Modifier.width(48.dp))
+        }
+
+        // Amount per day with Total
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                // Amount per day (read-only)
+                OutlinedTextField(
+                    value = amountPerDay,
+                    onValueChange = { },
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    label = { Text("Amount per day") },
+                    readOnly = true,
+                    enabled = false
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Total calculations
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Month Total: ₹$totalPossibleAmount",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Paid: ₹$totalPaidAmount",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Absent Days: ${monthImage.dayEntries.values.count { it.isAbsent }}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Remaining: ₹$remainingAmount",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // Amount Paid
+        OutlinedTextField(
+            value = amountPaid,
+            onValueChange = { amountPaid = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            label = { Text("Amount Paid") },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            )
+        )
+
+        // Absent Checkbox
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = isAbsent,
+                onCheckedChange = { isAbsent = it }
+            )
+            Text(
+                text = "Absent",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        // Submit Button
+        Button(
+            onClick = {
+                onSubmit(
+                    DateDetails(
+                        date = date,
+                        amountPerDay = amountPerDay,
+                        amountPaid = amountPaid,
+                        isAbsent = isAbsent
+                    )
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Text("Submit")
+        }
+    }
 }
